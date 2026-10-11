@@ -1,0 +1,21 @@
+{
+ "no_TTA": {
+  "per_seed": [
+   0.6686771210293526,
+   0.6618415761962203,
+   0.6722959388821874
+  ],
+  "mean": 0.6676048787025867,
+  "sd": 0.005309020860565207
+ },
+ "six_fold_TTA": {
+  "per_seed": [
+   0.7032569360675512,
+   0.6932046642541214,
+   0.694410936871733
+  ],
+  "mean": 0.6969575123978019,
+  "sd": 0.005488699967683474
+ },
+ "note": "Clean re-implementation of the pipeline exactly as described in the original submission (stage P_faithful in experiments/02_kaggle_ablation.py), Kaggle predefined test split, seeds 0-2."
+}
