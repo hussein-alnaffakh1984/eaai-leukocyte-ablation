@@ -101,7 +101,7 @@ def ablation_rows(ds, cfgs, cols):
     for c in cfgs:
         if c not in R[ds]["mean"]: continue
         pk = pair_key(c)
-        row = [LBL[c], pct(ds, c)] + [num(ds, c, k) for k in cols]
+        row = [LBL[c], pct(ds, c)] + [num(ds, c, k, 4 if k == "auc" else 3) for k in cols]
         row.append(pcell(ds, *pk) if pk else "—")
         rows.append(row)
     return rows
@@ -124,7 +124,7 @@ if "mcnemar_loo" in R["P"]:
     _t3.append("| *Leave-one-out from the final pipeline* |" + " |" * (_nc - 1))
     for c in LOO_ORDER:
         if c in R["P"]["mean"]:
-            _t3.append("| " + " | ".join([LBL[c], pct("P", c), num("P", c, "f1"), num("P", c, "bal"), num("P", c, "auc"), loo_cell(c)]) + " |")
+            _t3.append("| " + " | ".join([LBL[c], pct("P", c), num("P", c, "f1"), num("P", c, "bal"), num("P", c, "auc", 4), loo_cell(c)]) + " |")
     T["TABLE3"] = "\n".join(_t3) + "\n"
 T["TABLE4"] = table(["Configuration", "Accuracy", "Macro-F1", "McNemar p vs reference"],
                     [[r[0], r[1], r[2], r[3]] for r in ablation_rows("K", CFG_MAIN, ["f1"])],
@@ -301,7 +301,7 @@ X["L.text.compare"] = MAN["COMPARE"]
 X["D.text.ablation"] = (
     f"The ablation separates three groups of factors. Adapting the network to the task, by fine-tuning ({signed(pp('P','M2','M3'))} points on PBC, "
     f"{signed(pp('K','M2','M3'))} on Kaggle) and by changing the backbone from MobileNetV2 to EfficientNetB0 ({signed(pp('P','M3','M4'))} and {signed(pp('K','M3','M4'))}), produced the largest steps on both datasets; "
-    f"because the stages are cumulative, these step sizes depend on the order of the path (Section 5.3). The choice between the two strong backbones was dataset-specific: EfficientNetB0 was better on PBC and ResNet50 on Kaggle. "
+    f"because the stages are cumulative, these step sizes depend on the order of the path (Section 5.3), and the leave-one-out analysis confirms this: with all other components present, removing fine-tuning still cost {abs(pp('P','final','LOO_noFT')):.1f} points on PBC, whereas replacing EfficientNetB0 by MobileNetV2 cost less than one point. The choice between the two strong backbones was dataset-specific: EfficientNetB0 was better on PBC and ResNet50 on Kaggle. "
     f"The effect of luminance CLAHE depended on fine-tuning. With a frozen backbone it changed accuracy by {signed(pp('P','M1','M2'))} points on PBC and {signed(pp('K','M1','M2'))} on Kaggle, "
     f"presumably because enhanced images move further from the ImageNet statistics that the frozen features expect; once the backbone was fine-tuned, removing CLAHE lowered accuracy on both datasets "
     f"({signed(pp('P','M5','X_noCLAHE'))} and {signed(pp('K','M5','X_noCLAHE'))} points), most on the unevenly illuminated Kaggle fields. "

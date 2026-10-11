@@ -25,11 +25,14 @@ box(43.5, 38, 26, 12, "Backbone and training\n\nMobileNetV2, EfficientNetB0\nor 
 box(74, 38, 25.5, 12, "Loss and sampling\n\ncross-entropy or focal loss;\nuniform or class-balanced")
 box(74, 20, 25.5, 12, "Stored predictions\n\nvalidation and test sets,\nall 8 D4 views,\n" + (f"{len(R['P']['seeds'])} seeds" if len(R["P"]["seeds"]) == len(R["K"]["seeds"]) else f"{len(R['P']['seeds'])} (PBC) / {len(R['K']['seeds'])} (Kaggle) seeds"), fc="#fff1ea", ec=ORANGE)
 box(43.5, 20, 26, 12, "Inference\n\nTTA: none, 4, 6 or 8 views;\ntemperature scaling", fc="#fff1ea", ec=ORANGE)
+box(0.5, 18.5, 19, 7.5, "Raabin-WBC\n4,250 images\nexternal test only", fc="#f4f4f4", ec=INK2)
+box(24, 18.5, 15.5, 12.5, "Additional\nanalyses\n\nleave-one-out;\nfew-shot (M8)", fc="#f4f4f4", ec=INK2)
+arrow(10, 18.2, 10, 15.3); arrow(31.75, 18.2, 31.75, 15.3)
 box(0.5, 1, 99, 14, "Evaluation\naccuracy, macro-F1, balanced accuracy, AUC, per-class recall  ·  ECE, Brier score, reliability diagrams\n"
-    "exact McNemar test per seed  ·  cross-dataset transfer in both directions\nparameters, training and inference time  ·  Grad-CAM saliency maps", fc="#ebf8f2", ec=AQUA)
+    "exact McNemar test per seed with Holm correction  ·  cross-dataset transfer in both directions\nexternal test on Raabin-WBC  ·  parameters, training and inference time  ·  Grad-CAM saliency maps", fc="#ebf8f2", ec=AQUA)
 arrow(19.8, 52, 23.7, 46); arrow(19.8, 35, 23.7, 42); arrow(39.3, 44, 43.2, 44); arrow(69.8, 44, 73.7, 44)
 arrow(86.75, 37.7, 86.75, 32.3); arrow(73.7, 26, 69.8, 26); arrow(56.5, 19.7, 56.5, 15.3)
-ax.text(0.5, 61.5, "One factor is changed per stage (M1 to M7, M8 and two controls); all other settings are fixed.", fontsize=7.6, color=INK2)
+ax.text(0.5, 61.5, "One factor is changed per stage (M1 to M8, final pipeline and two controls); all other settings are fixed.", fontsize=7.6, color=INK2)
 fig.savefig(f"{od}/fig2_framework.png", dpi=300, bbox_inches="tight"); plt.close(fig)
 
 # ---------- Fig. 3 ablation ----------
@@ -37,7 +40,7 @@ ST = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "final", "X_noCLAHE", "B_r
 LB = ["M1", "M2\n+CLAHE", "M3\n+FT", "M4\nEffNet", "M5\n+focal", "M6\n4-TTA", "M7\n6-TTA", "M8\n+bal.", "Final", "No\nCLAHE", "ResNet\n50"]
 PREV = {"M2": "M1", "M3": "M2", "M4": "M3", "M5": "M4", "M6": "M5", "M7": "M6", "M8": "M5", "final": "M7", "X_noCLAHE": "M5", "B_resnet50": "M5"}
 fig, axs = plt.subplots(2, 1, figsize=(7.2, 5.6), sharey=False)
-for ax, ds, col, title in [(axs[0], "P", BLUE, "PBC (clinical single-cell images)"), (axs[1], "K", ORANGE, "Kaggle (augmented smear fields)")]:
+for ax, ds, col, title in [(axs[0], "P", BLUE, "PBC (hospital laboratory, single-cell crops)"), (axs[1], "K", ORANGE, "Kaggle (augmented smear fields)")]:
     mu = np.array([R[ds]["mean"][s]["acc"] * 100 for s in ST]); sd = np.array([(R[ds]["sd"][s]["acc"] or 0) * 100 for s in ST])
     x = np.arange(len(ST)); colors = [col] * 9 + ["#a8a7a2"] * 2
     ax.bar(x, mu, width=0.72, color=colors, yerr=sd, error_kw=dict(ecolor=INK2, lw=0.8, capsize=2), zorder=2)
