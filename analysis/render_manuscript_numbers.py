@@ -61,7 +61,10 @@ def table(header, rows, caption):
 LBL = {"M1": "M1 MobileNetV2, frozen", "M2": "M2 + CLAHE", "M3": "M3 + fine-tuning", "M4": "M4 EfficientNetB0",
        "M5": "M5 + focal loss", "M6": "M6 + 4-fold TTA", "M7": "M7 + 6-fold TTA", "M8": "M8 M5 + balanced sampling",
        "final": "Final: M8 + 6-fold TTA", "X_noCLAHE": "Control: M5 without CLAHE", "B_resnet50": "Control: M5 with ResNet50",
-       "M7_D4": "M5 + 8-fold TTA", "M8_4": "M8 + 4-fold TTA", "M8_8": "M8 + 8-fold TTA"}
+       "M7_D4": "M5 + 8-fold TTA", "M8_4": "M8 + 4-fold TTA", "M8_8": "M8 + 8-fold TTA",
+       "LOO_noCLAHE": "Final without CLAHE", "LOO_noFT": "Final without fine-tuning (frozen backbone)", "LOO_mobilenet": "Final with MobileNetV2",
+       "LOO_ce": "Final with cross-entropy instead of focal loss", "LOO_nobal": "Final without class-balanced sampling", "LOO_noTTA": "Final without TTA"}
+LOO_ORDER = ["LOO_noFT", "LOO_noTTA", "LOO_noCLAHE", "LOO_mobilenet", "LOO_nobal", "LOO_ce"]
 PREV = {"M2": "M1", "M3": "M2", "M4": "M3", "M5": "M4", "M6": "M5", "M7": "M6", "M8": "M5", "final": "M7",
         "X_noCLAHE": "M5", "B_resnet50": "M5"}
 
@@ -107,7 +110,22 @@ CFG_MAIN = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "final", "X_noCLAHE"
 T["TABLE3"] = table(["Configuration", "Accuracy", "Macro-F1", "Balanced accuracy", "Macro AUC", "McNemar p vs reference"],
                     ablation_rows("P", CFG_MAIN, ["f1", "bal", "auc"]),
                     f"Table 3. Ablation on the PBC test set (n = {R['P']['n']['TEST']}), mean ± standard deviation over {S['P']} seed{'s' if S['P'] > 1 else ''}. "
-                    "McNemar p (exact, range over seeds) compares each stage with the previous one; M8 with M5; the final pipeline with M7; controls with M5.")
+                    "McNemar p (exact, range over seeds) compares each stage with the previous one; M8 with M5; the final pipeline with M7; controls with M5. "
+                    "Leave-one-out rows (all with six-fold TTA except the row without TTA) are compared with the final pipeline; in brackets, the number of seeds in which the difference stays significant after Holm correction within the leave-one-out family.")
+def loo_cell(a):
+    d = R["P"].get("mcnemar_loo", {}).get(f"{a}->final", {})
+    if not d: return "—"
+    f = lambda p: "<0.001" if p < 0.001 else f"{p:.3f}"
+    ps = [v["p"] for v in d.values()]; k = sum(v["p_holm"] < 0.05 for v in d.values())
+    return (f(min(ps)) if f(min(ps)) == f(max(ps)) else f"{f(min(ps))}–{f(max(ps))}") + f" ({k}/{len(d)} after Holm)"
+if "mcnemar_loo" in R["P"]:
+    _t3 = T["TABLE3"].rstrip("\n").split("\n")
+    _nc = _t3[-1].count("|") - 1
+    _t3.append("| *Leave-one-out from the final pipeline* |" + " |" * (_nc - 1))
+    for c in LOO_ORDER:
+        if c in R["P"]["mean"]:
+            _t3.append("| " + " | ".join([LBL[c], pct("P", c), num("P", c, "f1"), num("P", c, "bal"), num("P", c, "auc"), loo_cell(c)]) + " |")
+    T["TABLE3"] = "\n".join(_t3) + "\n"
 T["TABLE4"] = table(["Configuration", "Accuracy", "Macro-F1", "McNemar p vs reference"],
                     [[r[0], r[1], r[2], r[3]] for r in ablation_rows("K", CFG_MAIN, ["f1"])],
                     f"Table 4. Ablation on the Kaggle test split (n = {R['K']['n']['TEST']}), mean ± standard deviation over {S['K']} seed{'s' if S['K'] > 1 else ''}. "
@@ -124,13 +142,20 @@ T["TABLE6"] = table(["Dataset", "Configuration", "ECE", "Brier", "Temperature", 
                     cal_rows("P", "PBC") + cal_rows("K", "Kaggle"),
                     "Table 6. Calibration on the test sets before and after temperature scaling fitted on the validation set (mean ± standard deviation; temperature is the mean).")
 
+import os as _os
+RB = json.load(open("raabin.json")) if _os.path.exists("raabin.json") else None
+def rbv(c, k="acc", sdv=True):
+    if not RB or c not in RB["mean"]: return "—"
+    m_, s_ = RB["mean"][c][k], RB["sd"][c][k]
+    if k == "f1": return f"{m_:.3f}" + (f" ± {s_:.3f}" if sdv and s_ is not None else "")
+    return f"{m_*100:.1f}" + (f" ± {s_*100:.1f}%" if sdv and s_ is not None else "%")
 def cross_rows():
     rows = []
-    for c in ["M5", "X_noCLAHE", "final", "B_resnet50"]:
-        rows.append([LBL[c], pct("P", c), pct("P", c, "ext_acc"), pct("K", c), pct("K", c, "ext_acc")])
+    for c in ["M5", "M8", "X_noCLAHE", "final", "B_resnet50"]:
+        rows.append([LBL[c], pct("P", c), pct("P", c, "ext_acc"), rbv(c), pct("K", c), pct("K", c, "ext_acc")])
     return rows
-T["TABLE7"] = table(["Configuration", "PBC → PBC", "PBC → Kaggle", "Kaggle → Kaggle", "Kaggle → PBC"], cross_rows(),
-                    f"Table 7. Accuracy within and across datasets (trained on → tested on), mean ± standard deviation. Test sets: PBC → PBC n = {R['P']['n']['TEST']}; PBC → Kaggle n = {R['P']['n']['KTEST']}; Kaggle → Kaggle n = {R['K']['n']['TEST']}; Kaggle → PBC n = {R['K']['n']['EXT']} (all PBC images of the four classes).")
+T["TABLE7"] = table(["Configuration", "PBC → PBC", "PBC → Kaggle", "PBC → Raabin", "Kaggle → Kaggle", "Kaggle → PBC"], cross_rows(),
+                    f"Table 7. Accuracy within and across datasets (trained on → tested on), mean ± standard deviation. Test sets: PBC → PBC n = {R['P']['n']['TEST']}; PBC → Kaggle n = {R['P']['n']['KTEST']}; Kaggle → Kaggle n = {R['K']['n']['TEST']}; Kaggle → PBC n = {R['K']['n']['EXT']} (all PBC images of the four classes); PBC → Raabin n = {RB['n'] if RB else '—'} (Raabin-WBC Test-A).")
 
 def cost_row(c, lbl):
     k = R["K"]["cost"].get(c); p = R["P"]["cost"].get(c)
@@ -157,6 +182,45 @@ X["P.final.accp"] = f"{m('P','final','acc')*100:.1f}%"; X["P.final.f1p"] = f"{m(
 X["P.final.aucp"] = f"{m('P','final','auc'):.3f}"; X["P.final.ecetsp"] = f"{m('P','final','ece_ts'):.3f}"
 X["C.final.ms6"] = f"{(R['P']['cost'].get('M8') or R['K']['cost']['M8'])['lat']['6-fold']:.0f}"
 
+_NM = {"M1->M2": "CLAHE on the frozen backbone (M1→M2)", "M2->M3": "fine-tuning (M2→M3)", "M3->M4": "the change of backbone (M3→M4)",
+       "M4->M5": "focal loss (M4→M5)", "M5->M6": "four-fold TTA", "M6->M7": "six-fold TTA after four-fold", "M5->M7": "six-fold TTA in total",
+       "M5->M8": "class-balanced sampling (M5→M8)", "M7->final": "class-balanced sampling under TTA (M7→final)", "M5->final": "the combined M5→final comparison",
+       "X_noCLAHE->M5": "removing CLAHE from M5", "B_resnet50->M5": "EfficientNetB0 against ResNet50"}
+def holm_all(ds):
+    return [k for k, d in R[ds]["mcnemar"].items() if all(v.get("p_holm", 1) < 0.05 for v in d.values()) and len(d) == S[ds]]
+_h = holm_all("P")
+HOLM_TXT = ("After Holm correction within each seed, " + (", ".join(_NM.get(k, k) for k in _h[:-1]) + (" and " if len(_h) > 1 else "") + _NM.get(_h[-1], _h[-1]) if _h else "no transition") +
+            (" remained significant in every seed." if len(_h) != 1 else " remained significant in every seed."))
+if RB:
+    _c = RB["counts"]
+    X["RB.n"] = f"{RB['n']:,}"; X["RB.counts"] = f"{_c[3]:,} neutrophils, {_c[1]:,} lymphocytes, {_c[0]:,} eosinophils and {_c[2]:,} monocytes"
+    X["RB.ratio"] = f"{max(_c)/min(_c):.1f}"; X["RB.neu"] = f"{_c[3]/sum(_c)*100:.0f}"
+    fm = RB["mean"]["final"]; xm = RB["mean"]["X_noCLAHE"]; m1 = RB["mean"]["M1"]
+    X["RB.final.acc"] = rbv("final"); X["RB.final.f1"] = rbv("final", "f1")
+    X["RB.text"] = (
+        f"On Raabin-WBC, which shares the single-cell field of view of PBC but comes from another laboratory, the final pipeline reached {rbv('final')} accuracy, "
+        f"but its macro-F1 was only {rbv('final','f1')}: neutrophils and lymphocytes were mostly recognised (recall {fm['rec_neu']*100:.0f}% and {fm['rec_lym']*100:.0f}%), "
+        f"whereas eosinophils and monocytes were mostly missed (recall {fm['rec_eos']*100:.0f}% and {fm['rec_mon']*100:.0f}%). Because neutrophils make up {X['RB.neu']}% of these images, "
+        f"accuracy alone overstates transfer. The loss on Kaggle images is therefore not only an effect of the field of view: even with matching single-cell crops, the minority classes did not transfer. "
+        f"{'CLAHE, which helped in-domain, did not help here: without it the network reached ' + rbv('X_noCLAHE') + ' accuracy and a macro-F1 of ' + rbv('X_noCLAHE','f1') + '. ' if xm['f1'] > fm['f1'] else ''}"
+        f"Few-shot adaptation, shown below for the Kaggle laboratory, is the natural remedy.")
+else:
+    for k in ["RB.n", "RB.counts", "RB.ratio", "RB.neu", "RB.text"]: X[k] = "[RAABIN PENDING]"
+if "mcnemar_loo" in R["P"]:
+    def lk(c): return sum(v["p_holm"] < 0.05 for v in R["P"]["mcnemar_loo"][f"{c}->final"].values())
+    def ld(c): return signed(pp("P", "final", c))
+    X["LOO.text"] = (
+        f"The leave-one-out analysis (lower part of Table 3) confirms this ranking from the opposite direction. Removing fine-tuning lowered accuracy by "
+        f"{abs(pp('P','final','LOO_noFT')):.1f} points, significantly in {lk('LOO_noFT')} of {S['P']} seeds after Holm correction. "
+        f"Removing TTA ({ld('LOO_noTTA')} points), CLAHE ({ld('LOO_noCLAHE')}), the EfficientNetB0 backbone ({ld('LOO_mobilenet')}) or class-balanced sampling ({ld('LOO_nobal')}) "
+        f"changed accuracy by less than one point each, significant after correction in at most {max(lk(c) for c in ['LOO_noTTA','LOO_noCLAHE','LOO_mobilenet','LOO_nobal'])} of {S['P']} seeds. "
+        f"Replacing focal loss by cross-entropy left accuracy unchanged ({pct('P','LOO_ce')} against {pct('P','final')}) and lowered the ECE of the final pipeline from "
+        f"{num('P','final','ece')} to {num('P','LOO_ce','ece')}, so in this pipeline focal loss affects calibration rather than accuracy.")
+    X["LOO.ft"] = f"{abs(pp('P','final','LOO_noFT')):.1f}"
+    X["LOO.focal"] = (f" The leave-one-out analysis supports this: with cross-entropy instead of focal loss, the final pipeline kept its accuracy and was better calibrated before scaling, so focal loss can be omitted from this pipeline.")
+else:
+    X["LOO.text"] = "[LOO PENDING]"; X["LOO.focal"] = ""
+X["N.pairs"] = str(len(R["P"]["mcnemar"]))
 X["P.text.ablation"] = (
     f"The frozen MobileNetV2 reference (M1) reached {pct('P','M1')}. Luminance CLAHE on the frozen backbone (M2) changed accuracy by "
     f"{signed(pp('P','M1','M2'))} points ({sig('P','M1','M2')}). Fine-tuning the last 30 layers (M3) changed it by {signed(pp('P','M2','M3'))} points "
@@ -166,7 +230,7 @@ X["P.text.ablation"] = (
     f"changed accuracy by {signed(pp('P','M5','M8'))} points relative to M5 ({sig('P','M5','M8')}), and the final pipeline (M8 with six-fold TTA) reached "
     f"{pct('P','final')}, macro-F1 {num('P','final','f1')} and macro AUC {num('P','final','auc')}. Although neither class-balanced sampling nor TTA was consistently significant on its own, their combination, tested post hoc, improved on M5 by {signed(pp('P','M5','final'))} points ({sig('P','M5','final')}). Removing CLAHE from M5 (control A) changed accuracy by "
     f"{signed(-pp('P','X_noCLAHE','M5'))} points ({sig('P','X_noCLAHE','M5')}), and the ResNet50 backbone (control B) reached {pct('P','B_resnet50')} "
-    f"against {pct('P','M5')} for EfficientNetB0 ({sig('P','B_resnet50','M5')}). In the sensitivity analysis, eight-fold TTA gave {pct('P','M8_8')} on the test set, "
+    f"against {pct('P','M5')} for EfficientNetB0 ({sig('P','B_resnet50','M5')}). {HOLM_TXT} In the sensitivity analysis, eight-fold TTA gave {pct('P','M8_8')} on the test set, "
     f"but on the validation set it was not better than six-fold TTA ({m('P','M8_8','val_acc')*100:.1f}% against {m('P','final','val_acc')*100:.1f}%), so six-fold TTA was kept.")
 X["K.text.ablation"] = (
     f"M1 reached {pct('K','M1')}; CLAHE added {signed(pp('K','M1','M2'))} points, fine-tuning {signed(pp('K','M2','M3'))} and EfficientNetB0 "
@@ -241,15 +305,15 @@ X["D.text.ablation"] = (
     f"presumably because enhanced images move further from the ImageNet statistics that the frozen features expect; once the backbone was fine-tuned, removing CLAHE lowered accuracy on both datasets "
     f"({signed(pp('P','M5','X_noCLAHE'))} and {signed(pp('K','M5','X_noCLAHE'))} points), most on the unevenly illuminated Kaggle fields. "
     f"Focal loss did not improve accuracy on either dataset ({signed(pp('P','M4','M5'))} and {signed(pp('K','M4','M5'))} points) and mainly changed calibration, which "
-    f"supports describing it as hard-example reweighting rather than as an accuracy component. Class-balanced sampling changed monocyte recall on PBC by {signed(pp('P','M5','M8','rec_mon'))} points "
+    f"supports describing it as hard-example reweighting rather than as an accuracy component.{{{{LOO.focal}}}} Class-balanced sampling changed monocyte recall on PBC by {signed(pp('P','M5','M8','rec_mon'))} points "
     f"and accuracy by {signed(pp('P','M5','M8'))} points, neither of which is a clear effect on its own; its combination with six-fold TTA, however, improved on M5 consistently. "
     f"TTA added small gains at a cost that grows with the number of views. For a practitioner, the order of priority is therefore: fine-tune with luminance contrast enhancement, "
     f"compare backbones on validation data from the target laboratory, recalibrate on held-out local data, and add class balancing and TTA when the latency budget allows.")
 X["D.text.conclusion"] = (
     f"This study measured the contribution of five pipeline factors and class-balanced sampling to leukocyte classification under a single-factor protocol, on two datasets "
-    f"and with {{{{NSEEDS}}}} seeds. On the clinical PBC dataset the final pipeline reached {pct('P','final')}, with fine-tuning and backbone choice producing the largest steps. "
+    f"and with {{{{NSEEDS}}}} seeds. On the PBC dataset the final pipeline reached {pct('P','final')}, with fine-tuning and backbone choice producing the largest steps. "
     f"Focal loss and TTA contributed little accuracy on their own, the effect of contrast enhancement depended on fine-tuning, and calibration required temperature scaling fitted on representative data. "
-    f"Accuracy fell sharply across datasets ({pct('P','final','ext_acc')} and {pct('K','final','ext_acc')}), which shows that single-dataset accuracy, however high, "
+    f"Accuracy fell sharply across datasets ({pct('P','final','ext_acc')} and {pct('K','final','ext_acc')}), and on a third laboratory the minority classes were largely missed (macro-F1 {rbv('final','f1')}), which shows that single-dataset accuracy, however high, "
     f"does not establish readiness for another laboratory. The released benchmark, with code, splits, weights and predictions, gives future work a documented reference point "
     f"against which new components can be measured on accuracy, calibration, transfer and cost.")
 

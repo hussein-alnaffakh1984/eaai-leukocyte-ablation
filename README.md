@@ -42,10 +42,11 @@ The exact image lists of every split are in `splits/pbc/` and `splits/kaggle/` (
 | `experiments/03_kaggle_dense_tta.py` | Dense rotation TTA on stored Kaggle models (exploratory) |
 | `experiments/04_pbc_ablation.py` | All stages on PBC, external test on the Kaggle test split |
 | `experiments/05_cpu_benchmark.py` | Operations per image and inference time on a two-core CPU |
+| `experiments/07_raabin_external_test_and_leave_one_out_colab.py` | External test of the PBC-trained networks on Raabin-WBC Test-A (no retraining) and leave-one-out from the final pipeline |
 | `experiments/06_pbc_seed2_and_fewshot_colab.py` | Google Colab version of the PBC run (resumable) plus the few-shot adaptation experiment (PBC-trained model fine-tuned on 10 or 50 Kaggle images per class) |
 | `analysis/analyse.py` | Computes every reported number (accuracy, F1, AUC, recall, ECE, Brier, temperature scaling, exact McNemar, cost) from stored predictions |
 | `analysis/figures.py` | Figures 2–5 of the paper |
-| `predictions/` | Stored softmax outputs for all 8 D4 views of every validation and test image (`preds_<stage>_s<seed>.npz`) and training logs, for every stage and seed on both datasets; `python analysis/analyse.py P predictions/pbc res_P.json` regenerates the PBC results (copy `splits/pbc/meta_*.csv` into the folder first) |
+| `predictions/` | `raabin/`: predictions of the PBC-trained networks on Raabin-WBC Test-A (`analysis/raabin.py` computes the reported values). Stored softmax outputs for all 8 D4 views of every validation and test image (`preds_<stage>_s<seed>.npz`) and training logs, for every stage and seed on both datasets; `python analysis/analyse.py P predictions/pbc res_P.json` regenerates the PBC results (copy `splits/pbc/meta_*.csv` into the folder first) |
 | `results/` | `res_P.json`, `res_K.json`: every accuracy, calibration, significance and cost value reported in the paper; `fewshot.json` and `fewshot_draws/`: few-shot adaptation results and the exact images drawn; `cpu_bench.json`: CPU timing; `faithful_reimplementation_kaggle.json`: re-implementation of the original submission's pipeline |
 | `splits/` | Image lists of each split |
 | `literature/screening_log.csv` | Structured literature search: 21 screened records, decisions, reasons and factor coding |

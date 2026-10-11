@@ -17,9 +17,12 @@ TTA = {"none": [0], "4": [0, 4, 5, 2], "6": [0, 4, 5, 1, 2, 3], "8": list(range(
 CONFIGS = {"M1": ("M1", "none"), "M2": ("M2", "none"), "M3": ("M3", "none"), "M4": ("M4", "none"),
            "M5": ("M5", "none"), "M6": ("M5", "4"), "M7": ("M5", "6"), "M7_D4": ("M5", "8"),
            "M8": ("M8", "none"), "M8_4": ("M8", "4"), "final": ("M8", "6"), "M8_8": ("M8", "8"),
-           "X_noCLAHE": ("X_noCLAHE", "none"), "B_resnet50": ("B_resnet50", "none")}
+           "X_noCLAHE": ("X_noCLAHE", "none"), "B_resnet50": ("B_resnet50", "none"),
+           "LOO_noCLAHE": ("LOO_noCLAHE", "6"), "LOO_noFT": ("LOO_noFT", "6"), "LOO_mobilenet": ("LOO_mobilenet", "6"),
+           "LOO_ce": ("LOO_ce", "6"), "LOO_nobal": ("M5", "6"), "LOO_noTTA": ("M8", "none")}
 PAIRS = [("M1", "M2"), ("M2", "M3"), ("M3", "M4"), ("M4", "M5"), ("M5", "M6"), ("M6", "M7"),
          ("M5", "M7"), ("M5", "M8"), ("M7", "final"), ("X_noCLAHE", "M5"), ("B_resnet50", "M5"), ("M5", "final")]
+LOO_PAIRS = [("LOO_noCLAHE", "final"), ("LOO_noFT", "final"), ("LOO_mobilenet", "final"), ("LOO_ce", "final"), ("LOO_nobal", "final"), ("LOO_noTTA", "final")]
 
 Y = {s: pd.read_csv(f"{d}/meta_{s}.csv").y.values for s in ["VAL", "TEST", EXT] if os.path.exists(f"{d}/meta_{s}.csv")}
 seeds = sorted({int(m.group(1)) for f in glob.glob(f"{d}/preds_M1_s*.npz") for m in [re.search(r"_s(\d+)\.npz", f)]})
@@ -99,6 +102,22 @@ for a, b in PAIRS:
             p = binomtest(min(n01, n10), n01 + n10, 0.5).pvalue if n01 + n10 else 1.0
             res["mcnemar"].setdefault(f"{a}->{b}", {})[s] = dict(b_better=n01, a_better=n10, p=float(p))
 
+for a_, b_ in LOO_PAIRS:
+    for s in seeds:
+        if (a_, s) in P and (b_, s) in P:
+            ca = P[(a_, s)]["TEST"].argmax(1) == Y["TEST"]; cb = P[(b_, s)]["TEST"].argmax(1) == Y["TEST"]
+            n01, n10 = int((~ca & cb).sum()), int((ca & ~cb).sum())
+            p = binomtest(min(n01, n10), n01 + n10, 0.5).pvalue if n01 + n10 else 1.0
+            res.setdefault("mcnemar_loo", {}).setdefault(f"{a_}->{b_}", {})[s] = dict(b_better=n01, a_better=n10, p=float(p))
+for k_, d_ in res.get("mcnemar_loo", {}).items():
+    pass
+# Holm correction across the planned comparisons, separately for each seed
+for s in seeds:
+    keys = [k for k in res["mcnemar"] if s in res["mcnemar"][k]]
+    ps = sorted((res["mcnemar"][k][s]["p"], k) for k in keys); m_ = len(ps); run_max = 0.0
+    for i, (p, k) in enumerate(ps):
+        run_max = max(run_max, min(1.0, (m_ - i) * p)); res["mcnemar"][k][s]["p_holm"] = run_max
+
 # compute cost from logs
 cost = {}
 for f in glob.glob(f"{d}/log_*_s*.json"):
@@ -116,6 +135,12 @@ for k, v in cost.items():
                           lat={t: float(np.median([x["latency_ms_per_image"][t] for x in g])) for t in g[0]["latency_ms_per_image"]},
                           n_runs=len(g), n_excluded=len(v) - len(g), mem_mb=[x.get("peak_gpu_mb_train") for x in g])
 res["n"] = {k: int(len(v)) for k, v in Y.items()}
+if "mcnemar_loo" in res:                                  # Holm within each seed across the leave-one-out family
+    for s in seeds:
+        ks = [k for k in res["mcnemar_loo"] if s in res["mcnemar_loo"][k]]
+        ps = sorted((res["mcnemar_loo"][k][s]["p"], k) for k in ks); run_max = 0.0
+        for i, (p, k) in enumerate(ps):
+            run_max = max(run_max, min(1.0, (len(ps) - i) * p)); res["mcnemar_loo"][k][s]["p_holm"] = run_max
 json.dump(res, open(out, "w"), indent=1)
 print("seeds", seeds, "configs", sorted(res["mean"]))
 for k in ["M1", "M4", "M5", "M7", "final", "X_noCLAHE", "B_resnet50"]:
