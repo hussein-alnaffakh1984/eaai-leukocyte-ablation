@@ -19,6 +19,7 @@ neutrophil). One factor is changed per stage:
 | M8 | M5 + class-balanced sampling |
 | Final | M8 + 6-fold test-time augmentation |
 | Controls | M5 without CLAHE; M5 with a ResNet50 backbone |
+| Leave-one-out | Final pipeline with one component removed: no CLAHE, no fine-tuning, MobileNetV2 backbone, cross-entropy instead of focal loss (trained); no balanced sampling (= M7) and no TTA (= M8) |
 
 Every trained stage is run with seeds 0, 1 and 2. Predictions are stored for all eight dihedral (D4) views of every
 validation and test image, so every TTA variant, calibration measure and McNemar test is computed offline.
@@ -31,7 +32,21 @@ validation and test image, so every TTA variant, calibration measure and McNemar
 * **Blood Cell Images** (second benchmark and external test): https://www.kaggle.com/datasets/paultimothymooney/blood-cells.
   Predefined test split used unchanged; validation split grouped by the original-image index in the file names.
 
+* **Raabin-WBC** (third laboratory, external test only): Kouzehkanan et al., Sci Rep 12 (2022) 1123,
+  https://www.kaggle.com/datasets/raabindata/raabin-wbc. Official Test-A without basophils (4,250 images); the
+  PBC-trained networks are applied without any retraining.
+
 The exact image lists of every split are in `splits/pbc/` and `splits/kaggle/` (PBC: file name, class and MD5 hash of every image).
+
+## Analyses added in the revision
+
+* **Leave-one-out from the final pipeline** (PBC, 3 seeds): `experiments/07_...`, predictions in `predictions/pbc/preds_LOO_*`.
+* **External test on Raabin-WBC** (no retraining): `experiments/07_...`, predictions in `predictions/raabin/`, values from `analysis/raabin.py`.
+* **Holm correction**: exact McNemar p-values are Holm-adjusted within each seed across the 12 main comparisons; the
+  leave-one-out comparisons form a separate family (`p_holm` in `results/res_P.json`).
+* **Few-shot adaptation to a second laboratory** (Kaggle, k = 10 and 50 labelled images per class, 3 repetitions,
+  ImageNet control): `experiments/06_...`, results in `results/fewshot.json`.
+* **CPU cost** (2 cores): `experiments/05_cpu_benchmark.py`, results in `results/cpu_bench.json`.
 
 ## Repository layout
 
@@ -60,7 +75,7 @@ The exact image lists of every split are in `splits/pbc/` and `splits/kaggle/` (
 4. Run `python analysis/figures.py res_P.json res_K.json figures/`.
 
 Environment: Python 3, TensorFlow 2 / Keras 3, OpenCV, scikit-learn, SciPy, pandas, matplotlib (see `requirements.txt`).
-Stored predictions for every stage and seed are in `predictions/`. The trained Keras weights of every PBC stage and seed (24 files, about 1.2 GB, too large for GitHub) are available at https://drive.google.com/drive/folders/1XlvRiwtpqAaQpMYVWB0coJK2gmflanQZ
+Stored predictions for every stage and seed are in `predictions/`. The trained Keras weights of every PBC stage and seed, including the four trained leave-one-out configurations (36 files, about 1.5 GB, too large for GitHub), are available at https://drive.google.com/drive/folders/1XlvRiwtpqAaQpMYVWB0coJK2gmflanQZ
 
 ## Licence
 
