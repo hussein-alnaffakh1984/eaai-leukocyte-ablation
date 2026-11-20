@@ -93,7 +93,7 @@ _fp = {"VAL": hashlib.md5("".join(SPLITS["VAL"].md5).encode()).hexdigest(),
        "KTEST": hashlib.md5("".join(SPLITS["KTEST"].cls + "/" + SPLITS["KTEST"].file).encode()).hexdigest()}
 _ref = {"VAL": "02cec4866a5d1fcf66f06a306a56ce19", "TEST": "d6246a9071861dec06fd90da148fb535", "KTEST": "07c6a44068d0aafec205c705a14946e1"}
 print("split check:", {k: _fp[k] == _ref[k] for k in _ref})
-assert _fp == _ref, "Split differs from the Colab run - stop and send this output to Claude."
+assert _fp == _ref, "Split differs from the Colab run - stop and check the setup before continuing."
 
 # %% [markdown]
 # ## 2. Load images (raw and luminance-CLAHE), 224x224 RGB
@@ -455,7 +455,7 @@ for slug in ["raabindata/raabin-wbc", "masoudnickparvar/white-blood-cells-datase
         rp = kagglehub.dataset_download(slug); RB_SLUG = slug; break
     except Exception as e:
         print("download failed:", slug, e)
-assert rp, "Raabin-WBC could not be downloaded - send this output to Claude."
+assert rp, "Raabin-WBC could not be downloaded - check the download source before continuing."
 _imgs = [p for p in glob.glob(f"{rp}/**/*", recursive=True) if p.lower().endswith((".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"))]
 def _cls(p):
     for part in reversed(p.split(os.sep)[:-1]):
@@ -511,7 +511,7 @@ for seed in [0, 1, 2]:
 
 
 # %% [markdown]
-# ## 11. Package results for Claude (downloads EAAI_day3_results.zip)
+# ## 11. Package results (downloads EAAI_day3_results.zip)
 
 # %%
 import zipfile

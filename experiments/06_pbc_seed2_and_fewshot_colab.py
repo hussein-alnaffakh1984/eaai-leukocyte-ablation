@@ -93,7 +93,7 @@ _fp = {"VAL": hashlib.md5("".join(SPLITS["VAL"].md5).encode()).hexdigest(),
        "KTEST": hashlib.md5("".join(SPLITS["KTEST"].cls + "/" + SPLITS["KTEST"].file).encode()).hexdigest()}
 _ref = {"VAL": "02cec4866a5d1fcf66f06a306a56ce19", "TEST": "d6246a9071861dec06fd90da148fb535", "KTEST": "07c6a44068d0aafec205c705a14946e1"}
 print("split check:", {k: _fp[k] == _ref[k] for k in _ref})
-assert _fp == _ref, "Split differs from the Colab run - stop and send this output to Claude."
+assert _fp == _ref, "Split differs from the Colab run - stop and check the setup before continuing."
 
 # %% [markdown]
 # ## 2. Load images (raw and luminance-CLAHE), 224x224 RGB
@@ -491,7 +491,7 @@ for rep in FS_REPS:
     ref = np.load(f"{OUT}/preds_M8_s{rep}.npz")["KTEST"][:, 0].argmax(1)
     agree = float((predict_d4(m0, X[("clahe", "KTEST")][:256])[:, 0].argmax(1) == ref[:256]).mean())
     print(f"rep {rep}: k=0 Kaggle acc {r0['KTEST_none']:.4f}, agreement with stored predictions {agree:.3f}")
-    assert agree > 0.97, "Loaded weights do not reproduce the stored predictions - stop and send this output to Claude."
+    assert agree > 0.97, "Loaded weights do not reproduce the stored predictions - stop and check the setup before continuing."
     rows.append(dict(rep=rep, k=0, init="pbc", **r0))
     for k in FS_K:
         rng = np.random.default_rng(1000 + 17 * rep + k)
@@ -540,7 +540,7 @@ fig.savefig(f"{OUT}/fig1_examples.png", dpi=300, bbox_inches="tight", pad_inches
 print("Figure 1 written")
 
 # %% [markdown]
-# ## 10. Package results for Claude (downloads EAAI_day2_results.zip)
+# ## 10. Package results (downloads EAAI_day2_results.zip)
 
 # %%
 import zipfile, glob
