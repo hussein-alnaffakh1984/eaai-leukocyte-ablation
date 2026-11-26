@@ -56,7 +56,11 @@ The exact image lists of every split are in `splits/pbc/` and `splits/kaggle/` (
   recall, intervals for the in-domain against cross-dataset difference and for differences in expected calibration error,
   exact tests for monocyte recall, and per-repetition differences for the exploratory few-shot experiment.
   Run with `python analysis/secondary_stats.py . results/secondary_stats.json`.
-* `analysis/make_supplementary_tables.py` typesets Supplementary Tables S2 to S5 from that file.
+* **Group-level resampling.** The Kaggle test split derives from 71 original images, and the file names of Raabin-WBC Test-A
+  carry 24 prefixes that we take to identify the smear or acquisition session. The same script repeats the intervals on these
+  test sets with resampling of whole groups instead of single images, and also reports per-class recall on the external test
+  sets and the frozen reference (M1) against the final pipeline on Raabin-WBC.
+* `analysis/make_supplementary_tables.py` typesets Supplementary Tables S2 to S6 from that file.
 
 ## Repository layout
 

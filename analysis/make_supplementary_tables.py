@@ -1,4 +1,4 @@
-"""Supplementary Tables S2-S5 (second revision), typeset from results/secondary_stats.json.
+"""Supplementary Tables S2-S6 (second revision), typeset from results/secondary_stats.json.
 Usage: python make_supp.py STATS_JSON OUT_DIR FIRST_PAGE_NUMBER"""
 import sys, json, os
 statsf, od, first = sys.argv[1], sys.argv[2], int(sys.argv[3])
@@ -58,10 +58,39 @@ for k in ["10", "50"]:
     for i, s in enumerate(S):
         v = R["fewshot"][k][s]
         def dc(key): return f"{sg(v[key]['diff_points'])} [{sg(v[key]['ci_points'][0])}, {sg(v[key]['ci_points'][1])}]"
-        rows5.append((k if i == 0 else "") + f" & {int(s)+1} & {v['no_adaptation']*100:.1f} & {v['pbc_start']*100:.1f} & {v['imagenet_start']*100:.1f} & "
+        rows5.append((k if i == 0 else "") + f" & {int(s)} & {v['no_adaptation']*100:.1f} & {v['pbc_start']*100:.1f} & {v['imagenet_start']*100:.1f} & "
                      f"{v['full_training_M8']*100:.1f} & {dc('pbc_minus_imagenet')} & {dc('pbc_minus_full_training')} \\\\")
     rows5.append("\\addlinespace")
 rows5 = "\n".join(rows5[:-1])
+
+# ---------------- S6: group-level resampling
+CL = R["cluster"]; M1 = R["raabin_m1"]
+def iv(v, sc=1.0, nd=1): return f"[{sg(v[0]*sc, nd)}, {sg(v[1]*sc, nd)}]"
+def ivp(v, sc=100.0): return f"[{v[0]*sc:.1f}, {v[1]*sc:.1f}]"
+rows6a = "\n".join(f"Accuracy, {ARROW(k)} ({CL['n_groups'][k]} groups) & " + " & ".join(f"{v[s]['acc']*100:.1f} {ivp(v[s]['ci'])}" for s in S) + " \\\\" for k, v in CL["acc"].items())
+rows6a += "\n\\addlinespace\n" + "\n".join("Difference, " + ARROW(k) + " & " + " & ".join(f"{v[s]['diff_points']:.1f} {ivp(v[s]['ci_points'], 1)}" for s in S) + " \\\\" for k, v in CL["domain_gap"].items())
+rows6b = []
+for ts, d in CL["paired_diff"].items():
+    for i, (pair, ds) in enumerate(d.items()):
+        rows6b.append((ARROW(ts) if i == 0 else "") + f" & {PAIRN[pair]} & " + " & ".join(f"{sg(ds[s]['diff_points'])} {iv(ds[s]['ci_points'])}" for s in S) + " \\\\")
+    rows6b.append("\\addlinespace")
+rows6b.append(" & Final pipeline against the frozen reference M1 (exact McNemar p: " + ", ".join(pv(M1[s]["p"]) for s in S) + ") & " +
+              " & ".join(f"{sg(M1[s]['diff_points'])} {iv(M1[s]['ci_group_points'])}" for s in S) + " \\\\")
+rows6b = "\n".join(rows6b)
+rows6c = []
+for ts, d in CL["recall"].items():
+    for i, (c, v) in enumerate(d.items()):
+        def g(s):
+            if ts == "PBC->Raabin" and c == "eos": return "n.e."
+            return ivp(v[s]["ci_group"])
+        rows6c.append((ARROW(ts) if i == 0 else "") + f" & {CN[c]} ({v['0']['n']}; {v['0']['groups']}) & " + " & ".join(f"{v[s]['recall']*100:.1f} {ivp(v[s]['ci_image'])} {g(s)}" for s in S) + " \\\\")
+    rows6c.append("\\addlinespace")
+rows6c = "\n".join(rows6c[:-1])
+rows6d = "\n".join("ECE, " + k.replace("->", "$\\rightarrow$") + " & " + " & ".join(f"{sg(v[s]['diff'],3)} {iv(v[s]['ci'],1,3)}" for s in S) + " \\\\" for k, v in CL["ece_diff"].items())
+fdc = CL["raabin_f1_diff"]
+rows6d += "\n\\addlinespace\nMacro-F1 on Raabin-WBC, M5 minus M5 without CLAHE & " + " & ".join(f"{sg(fdc[s]['diff'],3)} {iv(fdc[s]['ci'],1,3)}" for s in S) + " \\\\"
+eo = CL["raabin_eosinophils_in_largest_group"]
+FM = R["fewshot_vs_full_mean"]
 
 B = f"{R['bootstrap_resamples']:,}"
 doc = r"""\documentclass[11pt,a4paper]{article}
@@ -110,7 +139,7 @@ ROWSM
 \end{table}
 
 \begin{table}[p]
-\caption{Accuracy and macro-F1 on every test set with 95\% percentile bootstrap intervals (NBOOT resamples of the test images), per seed. The intervals reflect the sampling of test images, not training variability.}
+\caption{Accuracy and macro-F1 on every test set with 95\% percentile bootstrap intervals (NBOOT resamples of the test images), per seed. The intervals reflect the sampling of test images, not training variability; test images are resampled singly here, and intervals from the resampling of groups of related images on the Kaggle and Raabin-WBC test sets are given in Table S6.}
 \scriptsize\setlength{\tabcolsep}{3pt}\renewcommand{\arraystretch}{1.08}
 {\footnotesize\textbf{A. Accuracy and macro-F1}}\par\smallskip
 \begin{tabularx}{\linewidth}{@{}l L ccc ccc@{}}
@@ -159,7 +188,7 @@ ROWF
 \end{table}
 
 \begin{table}[p]
-\caption{Differences in expected calibration error (ECE) between two configurations on the same test images, with 95\% paired bootstrap intervals (NBOOT resamples), per seed. The temperature is kept as fitted on the validation set. A negative difference means a lower ECE for the second-named configuration. Differences are computed from unrounded values.}
+\caption{Differences in expected calibration error (ECE) between two configurations on the same test images, with 95\% paired bootstrap intervals (NBOOT resamples), per seed. The temperature is kept as fitted on the validation set. A negative difference means a lower ECE for the second-named configuration. Differences are computed from unrounded values. The percentile interval is not bias-corrected, and an ECE close to zero is overestimated under resampling, so a point estimate can lie near one end of its interval. Intervals for the Kaggle test split with resampling of original images are given in Table S6.}
 \footnotesize\setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.15}
 \begin{tabularx}{\linewidth}{@{}L cc cc cc@{}}
 \toprule
@@ -173,7 +202,7 @@ ROWS4
 \end{table}
 
 \begin{table}[p]
-\caption{Few-shot adaptation to the Kaggle laboratory (exploratory), per repetition: accuracy (\%) on the Kaggle test split (n = NKAG) without TTA. The per-image predictions of the adapted networks were not stored, so the differences are given with approximate 95\% intervals for independent proportions (Newcombe hybrid score); these intervals are descriptive, because the two networks are tested on the same images and Kaggle test images are not independent.}
+\caption{Few-shot adaptation to the Kaggle laboratory (exploratory), per repetition: accuracy (\%) on the Kaggle test split (n = NKAG) without TTA. The per-image predictions of the adapted networks were not stored, so the differences are given with approximate 95\% intervals for independent proportions (Newcombe hybrid score); these intervals are descriptive, because the two networks are tested on the same images and Kaggle test images are not independent. Repetition $i$ of the adaptation starts from seed $i$ of M8 trained on PBC; the pairing of a repetition with a seed of the network trained on the full split is arbitrary, and against the mean of the three full-training seeds (FULLMEAN\%) the differences are FULLDIFF points.}
 \footnotesize\setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.15}
 \begin{tabularx}{\linewidth}{@{}cc cccc LL@{}}
 \toprule
@@ -184,10 +213,58 @@ ROWS5
 \end{tabularx}
 \end{table}
 
+\begin{table}[p]
+\caption{Group-level resampling on the external test sets, per seed. The Kaggle test split derives from NGK original images (file-name index), and the file names of Raabin-WBC Test-A carry NGR prefixes (a date and a serial number), which we take to identify the smear or acquisition session. In this table the bootstrap (NBOOT resamples) draws these groups, with all their images, instead of single images; 95\% percentile intervals. A and B: accuracy of the final pipeline, its difference between test sets (percentage points; PBC test images are resampled singly), and paired accuracy differences between configurations (positive when the first-named configuration is better).}
+\scriptsize\setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.1}
+{\footnotesize\textbf{A. Final pipeline: accuracy (\%) and difference between in-domain and cross-dataset accuracy}}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}L ccc@{}}
+\toprule
+Quantity & Seed 0 & Seed 1 & Seed 2 \\
+\midrule
+ROWS6A
+\bottomrule
+\end{tabularx}
+
+\medskip
+{\footnotesize\textbf{B. Paired differences in accuracy (percentage points)}}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}l L ccc@{}}
+\toprule
+Trained $\rightarrow$ tested & Comparison & Seed 0 & Seed 1 & Seed 2 \\
+\midrule
+ROWS6B
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[p]
+\ContinuedFloat
+\caption{(continued) C: per-class recall of the final pipeline (\%), with the interval from the resampling of single images followed by the interval from the resampling of groups; in brackets after the class, the number of images and of groups. n.e.: not estimable, because EOTOP of the EON eosinophil images of Raabin-WBC Test-A share one prefix. D: differences in ECE on the Kaggle test split and in macro-F1 on Raabin-WBC, groups resampled.}
+\scriptsize\setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.1}
+{\footnotesize\textbf{C. Per-class recall of the final pipeline}}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}l L ccc@{}}
+\toprule
+Trained $\rightarrow$ tested & Class (images; groups) & Seed 0 & Seed 1 & Seed 2 \\
+\midrule
+ROWS6C
+\bottomrule
+\end{tabularx}
+
+\medskip
+{\footnotesize\textbf{D. Differences in ECE and in macro-F1}}\par\smallskip
+\begin{tabularx}{\linewidth}{@{}L ccc@{}}
+\toprule
+Difference & Seed 0 & Seed 1 & Seed 2 \\
+\midrule
+ROWS6D
+\bottomrule
+\end{tabularx}
+\end{table}
+
 \end{landscape}
 \end{document}
 """
-doc = (doc.replace("ROWS2", rows2).replace("ROWSM", rowsm).replace("ROWS3", rows3).replace("ROWSG", rowsg).replace("ROWSR", rowsr)
+doc = (doc.replace("ROWS6A", rows6a).replace("ROWS6B", rows6b).replace("ROWS6C", rows6c).replace("ROWS6D", rows6d).replace("NGK", str(CL["n_groups"]["Kaggle->Kaggle"])).replace("NGR", str(CL["n_groups"]["PBC->Raabin"])).replace("EOTOP", str(eo[0])).replace("EON", str(eo[1])).replace("FULLMEAN", f"{FM['full_mean']*100:.1f}").replace("FULLDIFF", ", ".join(f"{x:.1f}" for x in FM["diff_points"][:2]) + f" and {FM['diff_points'][2]:.1f}")
+          .replace("ROWS2", rows2).replace("ROWSM", rowsm).replace("ROWS3", rows3).replace("ROWSG", rowsg).replace("ROWSR", rowsr)
           .replace("ROWF", rowf).replace("ROWS4", rows4).replace("ROWS5", rows5).replace("NBOOT", B).replace("NMONO", str(nm))
           .replace("NKAG", f"{R['n']['Kaggle->Kaggle']:,}").replace("FIRSTPAGE", str(first)))
 open(f"{od}/supp_tables.tex", "w").write(doc)
