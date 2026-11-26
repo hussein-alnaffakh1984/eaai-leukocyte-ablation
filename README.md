@@ -48,6 +48,16 @@ The exact image lists of every split are in `splits/pbc/` and `splits/kaggle/` (
   ImageNet control): `experiments/06_...`, results in `results/fewshot.json`.
 * **CPU cost** (2 cores): `experiments/05_cpu_benchmark.py`, results in `results/cpu_bench.json`.
 
+## Analyses added in the second revision
+
+* **Inferential statistics for the secondary analyses** (`analysis/secondary_stats.py`, output in `results/secondary_stats.json`),
+  computed from the stored predictions without retraining: exact McNemar tests with Holm correction for the transfer
+  comparisons on each external test set, 95% bootstrap intervals (10,000 resamples) for accuracy, macro-F1 and per-class
+  recall, intervals for the in-domain against cross-dataset difference and for differences in expected calibration error,
+  exact tests for monocyte recall, and per-repetition differences for the exploratory few-shot experiment.
+  Run with `python analysis/secondary_stats.py . results/secondary_stats.json`.
+* `analysis/make_supplementary_tables.py` typesets Supplementary Tables S2 to S5 from that file.
+
 ## Repository layout
 
 | Path | Content |
